@@ -1,0 +1,198 @@
+---
+title: "Penguin Assignment"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 4 
+
+### **Initial set up**
+
+```{r}
+# Make sure to set the working directory using setwd("...") and check using getwd("...")
+
+```
+
+```{r, echo=TRUE, results = "hide", message= FALSE}
+# Load Libraries and functions required for this analysis from my files and folders contained in the zip file
+source("functions/libraries.R")
+source("functions/cleaning.R")
+source("functions/plotting.R")
+```
+
+### **Load the data**
+```{r}
+# Reading in the raw data
+penguins_raw <- read.csv("data_raw/penguins_raw.csv")
+```
+
+### **Clean the data**
+```{r}
+# Fix the column names, remove empty rows, remove columns called comment and delta using cleaning function saved in "functions/cleaning.R" file
+penguins_clean <- cleaning(penguins_raw)
+```
+
+```{r}
+# Save the cleaned data
+write.csv(penguins_clean, "data_clean/penguins_clean.csv")
+# Check the names of the headings in the cleaned data to make sure function has worked
+names(penguins_clean)
+```
+
+```{r}
+# Subset the data for the analysis and remove the penguins with NA body mass and NA flipper length using 'remove_empty_mass_flipper' function contained in "functions/cleaning.R" file
+penguins_mass_flipper <- remove_empty_mass_flipper(penguins_clean)
+# View the data to make sure all NAs have been removed 
+penguins_mass_flipper
+```
+
+
+##### Figures to initially view the patterns in the data
+
+```{r}
+# Plot a boxplot showing penguin flipper length for data visualisation
+flipper_boxplot <- ggplot(data = penguins_mass_flipper, aes(x = species, y = flipper_length_mm)) +
+  geom_boxplot(aes(color = species), width = 0.3, show.legend = FALSE) +
+  geom_jitter(aes(color = species), alpha = 0.3, show.legend = FALSE, position = position_jitter(width = 0.2, seed = 0)) +
+  scale_color_manual(values = c("#009E73", "#E69F00", "#0072B2")) +
+  scale_x_discrete(labels=c("Adelie","Chinstrap","Gentoo")) +
+  labs(title = "Flipper length by penguin species", x = "Penguin Species",
+       y = "Flipper length (mm)") +
+  theme_bw()+ 
+  theme(plot.title = element_text(hjust = 0.5))
+
+flipper_boxplot
+```
+
+```{r}
+# Plot a boxplot showing penguin body mass for data visualisation
+mass_boxplot <- ggplot(data = penguins_mass_flipper, aes(x = species, y = body_mass_g)) +
+  geom_boxplot(aes(color = species), width = 0.3, show.legend = FALSE) +
+  geom_jitter(aes(color = species), alpha = 0.3, show.legend = FALSE, position = position_jitter(width = 0.2, seed = 0)) +
+  scale_color_manual(values = c("#009E73", "#E69F00", "#0072B2")) +
+  scale_x_discrete(labels=c("Adelie","Chinstrap","Gentoo")) +
+  labs(title= "Body pass by penguin species",x = "Penguin Species",
+       y = "Body mass (g))") +
+  theme_bw()+ theme(plot.title = element_text(hjust = 0.5))
+
+mass_boxplot
+```
+
+There are clear differences in flipper length of particular species, however the differences in body size could influence flipper length within a species. Therefore, we can perform an ANCOVA to determine if Adelie, Chinstrap and Gentoo penguins have different flipper sizes once their differences in body size are taken into account. I will include body mass as a covariate in my analysis, while flipper length is the response variable and species is the explanatory categorical variable. 
+
+### **Running an ANCOVA**
+**Analysis of Covariance (ANCOVA)** is a way of examining interactions between categorical and continuous variables.
+
+##### Hypotheses for ANCOVA:
+**Main effect of species**:  
+- Null : The means of all the species are not significantly different from each other.  
+- Alternative : At least one of the species means is significantly different from at least one other species mean.  
+
+**Main effect of body mass**:  
+- Null : The gradient of body mass against flipper size is not different from 0.  
+- Alternative : The gradient of body mass against flipper size is different from 0.  
+
+**Interaction between species and body mass**:  
+- Null : The effect of species does not depend on body mass, and vice versa, so, the gradients  of the lines do not differ between species.  
+- Alternative : The effect of species does depend on body mass, and vice versa, so, the gradients of the lines do differ between species.  
+
+**Formula representing ANCOVA with an interaction between species and mass**:
+$FlipperLength = mu + Species + BodyMass + Species*BodyMass$
+
+##### **Checking the assumptions of ANCOVA**
+
+**The assumptions of ANCOVA include:**          
+- Random sampling, so the measurements at every combination of values for the explanatory variables are a random sample from the population of possible measurements.    
+- Normal distribution, so the measurements for every combination of values for the explanatory variables have a normal distribution in the corresponding population.     
+- Equal variance, so the variance of the response variable is the same for all combinations of the explanatory variables.     
+
+```{r}
+# Making a Linear model with interaction between species and mass
+flipper_mod1 <- lm(flipper_length_mm ~ species * body_mass_g, penguins_mass_flipper)
+# Making an ANCOVA model without interaction between species and mass
+flipper_mod2 <- lm(flipper_length_mm~ species+ body_mass_g, penguins_mass_flipper)
+```
+
+```{r}
+# Formulate plots to check the assumptions of ANCOVA
+
+# Plot a qqplot to check for normal distribution
+plot(flipper_mod1, which = 2)
+# Plot a residuals vs fitted plot to check for equal variance
+plot(flipper_mod1, which = 1)
+```
+
+**Interpretation:**   
+The Normal Q-Q plot shows that the data meets the assumption of normal distribution as the data points fall along the line showing a roughly linear relationship. It does tail off at the end so it is not perfectly normal, but follows it enough for the model to be accepted. 
+
+The Residuals vs Fitted plot supports the assumption of equal variance because the points do scatter rather randomly along the line of y=0. However, there is some clustering so there is not completely equal variance. I performed log, ln and squared transformations to check whether this would allow the data to fit the assumptions more accurately, but the untransformed data provides the most support for the assumptions.
+
+##### Summary table for the model:
+```{r}
+# Call the summary table for the linear model with the interaction between species and mass
+summary(flipper_mod1)
+```
+
+**Equations for each of the separate species lines, calculated from the model summary table:**   
+Regression line for Adelie penguins: $Y = 0.006677*X + 165.2$
+
+Regression line for Chinstrap penguins: $Y = 0.011905*X + 151.34$ 
+
+Regression line for Gentoo penguins: $Y = 0.009039*X + 171.259$    
+
+
+**What is the R-squared value?**    
+The R-squared value is 0.8553. This means that 85.53% of the variation in Flipper length is explained by its relationship with species type and body mass, which suggests that the results of the statistical test are biologically important. 
+
+##### Fitting the ANOVA table
+```{r}
+# Call the ANOVA table for the ANCOVA with the interaction
+anova(flipper_mod1)
+```
+
+### **Plotting the model results**
+
+```{r}
+# Plot a figure to display the data with the linear models overlaid 
+penguins_ANCOVA_plot <- ggplot(penguins_mass_flipper, aes(x = body_mass_g, y = flipper_length_mm, colour = species)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm") +
+  labs(title= "ANCOVA Model Plot", x = 'Body mass (g)',  
+       y = 'Flipper length (mm)') +
+  guides(color = guide_legend(title = "Species"))+
+  scale_color_manual(labels = c("Adelie", "Chinstrap", "Gentoo"), values = c("#009E73", "#E69F00", "#0072B2"))+
+  theme_bw()+ 
+   theme(plot.title = element_text(hjust = 0.5))+
+ stat_poly_line() +
+  stat_poly_eq(aes(label = paste(after_stat(eq.label), sep = "*\", \"*")))
+
+penguins_ANCOVA_plot
+```
+
+The colour palette chosen in colour blind friendly, so is accessible for all individuals. The equation for each of the separate species lines is also displayed on the graph. 
+
+**Conclusions that can be drawn from the ANOVA table and the figure:**      
+The ANOVA table shows that there is a statistically significant effect of species (F~2,336~ = 917.22, p=<2e^-16^), body mass (F~1,336~ = 178,7885, p=<2e^-16^) and the interaction between species and body mass (F~2,336~ = 3.9837, p=0.0195) on flipper length. The p values are all less than the critical alpha value of 0.05, so there are statistically significant effects of species, body mass and the interaction between species and body mass. 
+
+The figure confirms the conclusion that there is a significant interaction between species and body mass as the gradients of the lines differ between species, and particularly for Chinstrap and Gentoo species where it is clear that the lines would cross over. Because there is a significant interaction between body mass and flipper length, we cannot interpret our main effects biologically. Therefore, we can confirm that the effect of species on flipper size does depend on body mass, and vice versa, and therefore, as shown on the figure the gradients of the lines do differ between species. 
+
+### **Saving the figure**
+```{r, echo=TRUE, results = "hide", message= FALSE} 
+# Call the function that will save the figure as a .png which is in the "functions/plotting.R" file
+save_ANCOVA_plot_png(penguins_mass_flipper, 
+                      "figures/ANCOVA_plot.png", 
+                      size = 15, res = 600, scaling=1)
+
+# Call the function that will save the figurea as a .svg which is in the "funcitons/plotting.R" file. An .svg file is not pixelated when zooming in.
+save_ANCOVA_plot_svg(penguins_mass_flipper, "figures/ANCOVA_plot.svg", 
+                      size = 15, scaling = 1)
+
+```
+
+
+
